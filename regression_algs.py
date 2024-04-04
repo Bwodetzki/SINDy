@@ -8,8 +8,14 @@ from data_generator import general_func
 # def feature_generator(num_states=1, polynomials)
 
 def l1_prox_op(z, prox_w):
-    #  return jnp.maximum(0.,z-prox_w/2)-jnp.maximum(0.,-z-prox_w/2)
     return jnp.sign(z) * jnp.maximum(abs(z) - prox_w, 0)
+
+def l0_prox_op(z, prox_w):
+    z_updated = []
+    for i in range(len(z)):
+        val = z[i] if z[i]>prox_w else [0.]
+        z_updated.append(val)
+    return jnp.array(z_updated)
 
 def proximal_optimization(Phi, b, prox_op, alpha, x_init, eps=1e-8, prox_w=0.1):
     x = x_init
@@ -92,7 +98,7 @@ def main():
    ## Cross Validation
    key, subkey = jax.random.split(key)
    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=int(subkey[0]))
-   opt_fun = lambda phi_mat, data, param: SR3(phi_mat, data, C, l1_prox_op, x_init, kappa=1, prox_w=param)[0]
+   opt_fun = lambda phi_mat, data, param: SR3(phi_mat, data, C, l0_prox_op, x_init, kappa=1, prox_w=param)[0]
    fit, error, prox_w = cross_validation(opt_fun, features, 
                                          train_data=(x_train, y_train), 
                                          test_data=(x_test, y_test), 
