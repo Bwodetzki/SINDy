@@ -70,7 +70,26 @@ def SR3_proximal(Phi, b, C, prox_op, x_init, kappa=1, prox_w=0.1, eps=1e-8):
 '''
 Original SINDy Regression
 '''
+def lstsq_reassignment(Phi, b, z, prox_op, prox_w):
+    smallinds = prox_op(z, prox_w) == 0
+    z[smallinds] = 0
+    for idx in range(z.shape[1]):
+        biginds = smallinds[:, idx] == 0
+        z[biginds, idx] = jnp.linalg.lstsq(Phi[:, biginds], b[:, idx])[0]
+    return z
+    
+    
 
+def vanilla_SINDy(Phi, b, x_init, prox_w, eps=1e-8):
+    x = x_init
+    x_old = x_init+1.
+
+    # Main Loop
+    x = jnp.linalg.lstsq(Phi, b)[0]
+    while jnp.linalg.norm(x - x_old) > eps:
+        x_old = x
+        x = lstsq_reassignment(Phi, b, x, l0_prox_op, prox_w)
+    return x
 
 
 '''
@@ -97,7 +116,7 @@ def cross_validation(optimization_func, features, train_data, test_data, param_r
 def proximal_CV(X, y, features, alpha, key, proximal_operator=l1_prox_op, test_size=0.25, param_ranges=[0.001, 10], resolution=1000):
     key, subkey = jax.random.split(key)
     size = len(features(0))
-    x_init = jax.random.normal(subkey, (size,))
+    x_init = jax.random.normal(subkey, (size,1))
 
     key, subkey = jax.random.split(key)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=int(subkey[0]))
@@ -141,24 +160,12 @@ def main():
     # fit = proximal_optimization(Phi, y, l1_prox_op, 0.00001, x_init, prox_w=3)
 
     C = jnp.eye(size)
-    # fit, _ = SR3(Phi, y, C, l1_prox_op, x_init, kappa=1, prox_w=0.1)
-    #    print(fit)
 
     ## Cross Validation
     key, subkey = jax.random.split(key)
-    # x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=int(subkey[0]))
-    # opt_fun = lambda phi_mat, data, param: SR3(phi_mat, data, C, l0_prox_op, x_init, kappa=1, prox_w=param)[0]
-    # fit, error, prox_w = cross_validation(opt_fun, features, 
-    #                                         train_data=(x_train, y_train), 
-    #                                         test_data=(x_test, y_test), 
-    #                                         param_ranges=[0.001, 10], 
-    #                                         resolution=1000)
-    
     fit, error, prox_w = proximal_CV(x, y, features, alpha=0.00001, key=subkey, param_ranges=[0.001, 100], resolution=100)
-    # print(error)
+    print(error)
     print(fit)
-
-    #    fit = jnp.linalg.lstsq(Phi, y)[0]
 
     plt.figure()
     plt.plot(x, y)

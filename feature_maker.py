@@ -28,14 +28,45 @@ def multivariate_polynomials(state_dim, order):
             polynomials.append(func)
     return polynomials
     
-def main():
-    polys = multivariate_polynomials(2, 3)
-    new_func = jax.vmap(lambda x: jnp.array([poly(x) for poly in polys]))
-    # print(polys)
-    res = new_func(jnp.array([[2, 1],
-                        [3, 1]]))
-    print(res)
+def sinusoids(state_dim, freq_range=[(0.01)*2*jnp.pi, (1)*2*jnp.pi], resolution=10):
+    # Create List of Variables
+    vars = []
+    for i in range(state_dim):
+        vars.append(sy.Symbol(f'x{i}'))
     
+    # Get Frequencies
+    freqs = jnp.linspace(freq_range[0], freq_range[1], resolution)
+    funcs = []
+    for var, omega in zip(vars, freqs):
+        sinf = jnp.sin(omega*var)
+        cosf = jnp.cos(omega*var)
+        funcs.extend([sy.lambdify((vars,), sinf), sy.lambdify((vars,), cosf)])
+    return funcs
+
+def make_feature_matrix(func_list, include1=True):
+    if include1:
+        func = lambda x: jnp.array([1.]+[f(x) for f in func_list])
+    else:
+        func = lambda x: jnp.array([1.]+[f(x) for f in func_list])
+        # features = jax.vmap(lambda x: jnp.array([f(x) for f in feature_list]), in_axes=0)
+    features = jax.vmap(func, in_axes=0)
+    return features
+
+def polynomial_features(state_dim, order):
+    polys = multivariate_polynomials(state_dim, order)
+    features = make_feature_matrix(polys)
+    return features
+
+def main():
+    polys = multivariate_polynomials(2, 2)
+    # sinusoidal_funcs = sinusoids(state_dim=2, resolution=3)
+
+    features = make_feature_matrix(polys, include1=True)
+
+    data = jnp.ones((3, 2))*2.01
+    Phi = features(data)
+
+    print(Phi)
 
 if __name__ == "__main__":
     main()
