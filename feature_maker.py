@@ -21,12 +21,15 @@ def multivariate_polynomials(state_dim, order):
         vars.append(sy.Symbol(f'x{i}'))
     
     polynomials = []
+    polynomial_name = []
     for i in range(1, order+1):
         func_tuples = combinations_with_replacement(vars, i)
         for term in func_tuples:
-            func = sy.lambdify((vars,), multiply_tuple(term))
+            mult = multiply_tuple(term)
+            polynomial_name.append(mult)
+            func = sy.lambdify((vars,), mult)
             polynomials.append(func)
-    return polynomials
+    return polynomials, polynomial_name
     
 def sinusoids(state_dim, freq_range=[(0.01)*2*jnp.pi, (1)*2*jnp.pi], resolution=10):
     # Create List of Variables
@@ -47,15 +50,18 @@ def make_feature_matrix(func_list, include1=True):
     if include1:
         func = lambda x: jnp.array([1.]+[f(x) for f in func_list])
     else:
-        func = lambda x: jnp.array([1.]+[f(x) for f in func_list])
+        func = lambda x: jnp.array([f(x) for f in func_list])
         # features = jax.vmap(lambda x: jnp.array([f(x) for f in feature_list]), in_axes=0)
     features = jax.vmap(func, in_axes=0)
     return features
 
-def polynomial_features(state_dim, order):
-    polys = multivariate_polynomials(state_dim, order)
-    features = make_feature_matrix(polys)
-    return features
+def polynomial_features(state_dim, order, include1=True):
+    feature_list, feature_name = multivariate_polynomials(state_dim, order)
+    features = make_feature_matrix(feature_list, include1)
+    if include1:
+        feature_list = [lambda x: 1] + feature_list
+        feature_name = [1.] + feature_name
+    return features, feature_list, feature_name
 
 def main():
     polys = multivariate_polynomials(2, 2)

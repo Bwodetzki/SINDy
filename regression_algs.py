@@ -1,9 +1,11 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split
-from data_generator import general_func
+from data_generator import general_func, solve_lorenz_sys
+from feature_maker import polynomial_features
 from tqdm import tqdm
 
 # def feature_generator(num_states=1, polynomials)
@@ -14,11 +16,9 @@ def l1_prox_op(z, prox_w):
     return jnp.sign(z) * jnp.maximum(abs(z) - prox_w, 0)
 
 def l0_prox_op(z, prox_w):
-    z_updated = []
-    for i in range(len(z)):
-        val = z[i] if z[i]>prox_w else [0.]
-        z_updated.append(val)
-    return jnp.array(z_updated)
+    smallinds = jnp.abs(z) < prox_w
+    z = z.at[smallinds].set(0)
+    return z, smallinds
 
 '''
 Core Proximal Optimization
@@ -71,21 +71,16 @@ def SR3_proximal(Phi, b, C, prox_op, x_init, kappa=1, prox_w=0.1, eps=1e-8):
 Original SINDy Regression
 '''
 def lstsq_reassignment(Phi, b, z, prox_op, prox_w):
-    smallinds = prox_op(z, prox_w) == 0
-    z[smallinds] = 0
+    z, smallinds = prox_op(z, prox_w)
     for idx in range(z.shape[1]):
         biginds = smallinds[:, idx] == 0
-        z[biginds, idx] = jnp.linalg.lstsq(Phi[:, biginds], b[:, idx])[0]
+        z = z.at[biginds, idx].set(jnp.array(np.linalg.lstsq(Phi[:, biginds], b[:, idx], rcond=None)[0]))
     return z
-    
-    
 
-def vanilla_SINDy(Phi, b, x_init, prox_w, eps=1e-8):
-    x = x_init
-    x_old = x_init+1.
 
-    # Main Loop
-    x = jnp.linalg.lstsq(Phi, b)[0]
+def vanilla_SINDy(Phi, b, prox_w, eps=1e-8):
+    x = jnp.array(np.linalg.lstsq(Phi, b, rcond=None)[0])
+    x_old = x + 0.1
     while jnp.linalg.norm(x - x_old) > eps:
         x_old = x
         x = lstsq_reassignment(Phi, b, x, l0_prox_op, prox_w)
@@ -143,34 +138,69 @@ def SR3_CV(X, y, features, C, kappa, key, proximal_operator=l1_prox_op, test_siz
                                             resolution=resolution)
     return fit, error, prox_w
 
+def SINDy_CV(X, y, features, key, test_size=0.25, param_ranges=[0.0001, 10], resolution=1000):
+    key, subkey = jax.random.split(key)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=int(subkey[0]))
+    opt_fun = vanilla_SINDy
+    fit, error, prox_w = cross_validation(opt_fun, features, 
+                                            train_data=(X_train, X_train), 
+                                            test_data=(X_test, X_test), 
+                                            param_ranges=param_ranges, 
+                                            resolution=resolution)
+    return fit, error, prox_w
+
 def main():
-    key, subkey = jax.random.split(jax.random.PRNGKey(0))
-    fun = lambda x: 3*x**3 - x**2 - 2*x + 3
-    x, y = general_func(fun, subkey, lim=[-2.5, 2.5], num_samples=1000, sigma=1)
+    # key, subkey = jax.random.split(jax.random.PRNGKey(0))
+    # fun = lambda x: 3*x**3 - x**2 - 2*x + 3
+    # x, y = general_func(fun, subkey, lim=[-2.5, 2.5], num_samples=1000, sigma=1)
 
-    #    poly = PolynomialFeatures(degree=5)
-    #    Phi = poly.fit_transform(x)
-    size = 5
-    features = lambda x: jnp.array([x**i for i in range(size)]).T
-    Phi = features(x)
+    # #    poly = PolynomialFeatures(degree=5)
+    # #    Phi = poly.fit_transform(x)
+    # size = 5
+    # features = lambda x: jnp.array([x**i for i in range(size)]).T
+    # Phi = features(x)
 
-    key, subkey = jax.random.split(key)
-    x_init = jax.random.normal(subkey, (size,))
+    # key, subkey = jax.random.split(key)
+    # x_init = jax.random.normal(subkey, (size,))
 
-    # fit = proximal_optimization(Phi, y, l1_prox_op, 0.00001, x_init, prox_w=3)
+    # # fit = proximal_optimization(Phi, y, l1_prox_op, 0.00001, x_init, prox_w=3)
 
-    C = jnp.eye(size)
+    # C = jnp.eye(size)
 
-    ## Cross Validation
-    key, subkey = jax.random.split(key)
-    fit, error, prox_w = proximal_CV(x, y, features, alpha=0.00001, key=subkey, param_ranges=[0.001, 100], resolution=100)
-    print(error)
-    print(fit)
+    # ## Cross Validation
+    # key, subkey = jax.random.split(key)
+    # fit, error, prox_w = proximal_CV(x, y, features, alpha=0.00001, key=subkey, param_ranges=[0.001, 100], resolution=100)
+    # print(error)
+    # print(fit)
 
-    plt.figure()
-    plt.plot(x, y)
-    plt.plot(x, Phi@fit)
+    # plt.figure()
+    # plt.plot(x, y)
+    # plt.plot(x, Phi@fit)
+    # plt.show()
+
+    t, Y, Yd = solve_lorenz_sys(10)
+    # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+    # ax.plot(x, y, z)
+
+    features, feature_list, feature_name = polynomial_features(state_dim=3, order=3)
+
+    Phi = features(Y)
+
+    # key, subkey = jax.random.split(jax.random.PRNGKey(0))
+    # x_init = jax.random.normal(subkey, (Phi.shape[1], Y.shape[1]))
+
+    fit = vanilla_SINDy(Phi, Yd, prox_w=0.05)
+    # fit, _, _ = SINDy_CV()
+    Y_pred = Phi@fit
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+
+    ax[0].plot(Y_pred[:, 0], Y_pred[:, 1], Y_pred[:, 2])
+    ax[1].plot(Y[:, 0], Y[:, 1], Y[:, 2])
     plt.show()
+
+    print('here')
 
 if __name__ == "__main__":
     main() 

@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+import functools as ft
 
 def general_func(fun, key, lim=[0, 10], num_samples=100, sigma=0):
     x = jnp.linspace(lim[0], lim[1], num_samples)
@@ -29,14 +30,18 @@ def solve_lorenz_sys(tf, num_points=1000, sigma=10, rho=28, beta=8/3, ics=[-8.0,
         'abstol' : 1e-12
     }
 
-    sol = solve_ivp(lorenz_eoms, t_span, ics, t_eval=sample_points, args=((sigma, rho, beta),), **options)
-    x, y, z = sol.y
-    return (sol.t, x, y, z)
+    params = (sigma, rho, beta)
+    sol = solve_ivp(lorenz_eoms, t_span, ics, t_eval=sample_points, args=(params,), **options)
 
+    xd_fun = jax.vmap(ft.partial(lorenz_eoms, params=params))
+    xds = jnp.array(xd_fun(sol.t, sol.y.T)).T
+
+    return (sol.t, sol.y.T, xds)
 
 def main():
     ## Solve Lorenz System
-    t, x, y, z = solve_lorenz_sys(10)
+    t, Y, Yd = solve_lorenz_sys(10)
+    x, y, z = Y.T
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
     ax.plot(x, y, z)
