@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 import sympy as sy
 from itertools import combinations_with_replacement
+import numpy as np
+from IPython.display import display
 
 '''
 File for making feature matrices
@@ -62,6 +64,39 @@ def polynomial_features(state_dim, order, include1=True):
         feature_list = [lambda x: 1] + feature_list
         feature_name = [1.] + feature_name
     return features, feature_list, feature_name
+
+def get_functions(fit, feature_name, disp=True):
+    t = sy.Symbol('t')
+    vars = [sy.Function(f'x{i}')(t) for i in range(fit.shape[1])]
+    eqs = np.einsum('i, ij -> ij', feature_name, fit)
+    eq_list = np.sum(eqs, axis=0)
+    eq_list = [sy.Eq(sy.diff(vars[i], t), eq_list[i]) for i in range(fit.shape[1])]
+    if disp:
+        sy.init_printing(use_latex='mathjax')
+        for eq in eq_list:
+            display(eq)
+
+    return eq_list
+
+def get_integrator(fit, feature_list):
+    biginds = np.abs(fit) > 0
+
+    lams = []
+    for j in range(fit.shape[1]):
+        inds = biginds.astype(int)[:, j]
+        lam = []
+        for i in range(fit.shape[0]):
+            if inds[i]!=0:
+                lam.append([fit[i, j], feature_list[i]])
+        lamm = lambda x, lam=lam: sum([f[0]*f[1](x) for f in lam])
+        lams.append(lamm)
+    lams[0]([0, 1, 0])
+
+    def integrator(t, x):
+        dX = [lams[i](x) for i in range(len(lams))]
+        return dX
+    
+    return integrator
 
 def main():
     polys = multivariate_polynomials(2, 2)
