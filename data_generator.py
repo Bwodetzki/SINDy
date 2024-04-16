@@ -12,7 +12,7 @@ def general_func(fun, key, lim=[0, 10], num_samples=100, sigma=0):
 
     return (x, corrupt_y)
 
-def solve_lorenz_sys(tf, num_points=1000, sigma=10, rho=28, beta=8/3, ics=[-8.0, 7.0, 27.0]):
+def solve_lorenz_sys(tf, num_points=1000, sigma=10, rho=28, beta=8/3, ics=[-8.0, 7.0, 27.0], noise_sigma=0, seed=0):
     def lorenz_eoms(t, y, params):
         sigma, rho, beta = params
         x1, x2, x3 = y
@@ -36,7 +36,16 @@ def solve_lorenz_sys(tf, num_points=1000, sigma=10, rho=28, beta=8/3, ics=[-8.0,
     xd_fun = jax.vmap(ft.partial(lorenz_eoms, params=params))
     xds = jnp.array(xd_fun(sol.t, sol.y.T)).T
 
-    return (sol.t, sol.y.T, xds)
+    # Apply Noise
+    key, subkey = jax.random.split(jax.random.PRNGKey(seed))
+    noise1 = jax.random.normal(subkey, shape=(sol.y.T.shape))*noise_sigma
+    key, subkey = jax.random.split(key)
+    noise2 = jax.random.normal(subkey, shape=xds.shape)*noise_sigma
+
+    xs_noise = sol.y.T + noise1
+    xds_noise = xds + noise2
+
+    return (sol.t, xs_noise, xds_noise)
 
 def main():
     ## Solve Lorenz System

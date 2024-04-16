@@ -185,7 +185,7 @@ def main():
     # plt.show()
 
     # Get data
-    t, bigX, dX = dg.solve_lorenz_sys(10)
+    t, bigX, dX = dg.solve_lorenz_sys(10, noise_sigma=0)
     # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
     # Get features
@@ -196,7 +196,7 @@ def main():
 
     # Fit the function
     ##
-    fit = vanilla_SINDy(Phi, dX, prox_w=0.05, prox_op=l1_prox_op)
+    # fit = vanilla_SINDy(Phi, dX, prox_w=0.05, prox_op=l0_prox_op)
     ##
     # key, subkey = jax.random.split(jax.random.PRNGKey(0))
     # fit, _, _ = SINDy_CV(bigX, dX, features, subkey)
@@ -206,9 +206,9 @@ def main():
     # x_init = jax.random.normal(subkey, (Phi.shape[1], bigX.shape[1]))
     # fit, _ = SR3(Phi, dX, C, l0_prox_op, x_init)
     ##
-    # C = jnp.eye(len(Phi[0]))
-    # key, subkey = jax.random.split(jax.random.PRNGKey(0))
-    # fit, _, _ = SR3_CV(bigX, dX, features, C, 1, subkey, proximal_operator=l1_prox_op, test_size=0.25, param_ranges=[0.001, 10], resolution=100)
+    C = jnp.eye(len(Phi[0]))
+    key, subkey = jax.random.split(jax.random.PRNGKey(0))
+    fit, _, _ = SR3_CV(bigX, dX, features, C, 1, subkey, proximal_operator=l1_prox_op, test_size=0.25, param_ranges=[0.001, 10], resolution=100)
 
     
     # Get integrator
@@ -222,8 +222,11 @@ def main():
 
     fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
 
-    ax[0].plot(x, y, z)
-    ax[1].plot(bigX[:, 0], bigX[:, 1], bigX[:, 2])
+    ax[1].plot(x, y, z)
+    ax[0].plot(bigX[:, 0], bigX[:, 1], bigX[:, 2])
+    ax[0].set_title("True Dynamical System")
+    ax[1].set_title("Predicted Dynamical System")
+    fig.suptitle("$l_1$ Regularized SR3")
     plt.show()
     print('here')
 
