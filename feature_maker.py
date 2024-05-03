@@ -90,7 +90,6 @@ def get_integrator(fit, feature_list):
                 lam.append([fit[i, j], feature_list[i]])
         lamm = lambda x, lam=lam: sum([f[0]*f[1](x) for f in lam])
         lams.append(lamm)
-    lams[0]([0, 1, 0])
 
     def integrator(t, x):
         dX = [lams[i](x) for i in range(len(lams))]

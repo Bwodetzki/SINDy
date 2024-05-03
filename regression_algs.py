@@ -84,10 +84,11 @@ def vanilla_SINDy(Phi, b, prox_w, prox_op=l0_prox_op, eps=1e-8):
     x = jnp.array(np.linalg.lstsq(Phi, b, rcond=None)[0])
     x_old = x + 0.1
     i=0
-    while jnp.linalg.norm(x - x_old) > eps and i < max_iters:
+    while (jnp.linalg.norm(x - x_old) > eps) and (i < max_iters):
         x_old = x
         x = lstsq_reassignment(Phi, b, x, prox_op, prox_w)
-        i+=0
+        i+=1
+        # print(i)
     return x
 
 
